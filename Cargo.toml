@@ -1,0 +1,21 @@
+[package]
+name = "gcloud-uri-signer"
+version = "1.0.0"
+authors = ["Simonas Kazlauskas <simonas@standard.ai>"]
+edition = "2018"
+
+[dependencies]
+base64 = "0.11"
+chrono = "0.4"
+data-encoding = "2"
+http = "0.2"
+hyper = "0.13"
+itertools = "0.8"
+percent-encoding = "2"
+ring = "0.16"
+rustls = "0.16"
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+structopt = "0.3"
+thiserror = "1"
+tokio = { version = "0.2", features = ["rt-threaded"] }

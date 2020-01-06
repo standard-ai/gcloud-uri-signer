@@ -1,0 +1,25 @@
+This is a basic authentication proxy for google storage
+
+This tool was primarily implemented in order to use it with Nix – thus enabling nix substituters in
+google cloud storage buckets.
+
+In contrast to [tweag/nix-store-gcs-proxy](https://github.com/tweag/nix-store-gcs-proxy) this tool
+does not actually proxy the data and instead redirects clients to signed googleapis URLs. As a
+consequence this tool is extremely lightweight and removes most of the intermediate overhead. The
+downside is that this tool necessarily needs a well scoped service account to operate as it exposes
+all the buckets accessible by the service key in question.
+
+A typical use of this program would be to run it on a Google Cloud Run or some such like this:
+
+```
+gcloud-uri-signer --put --post -c $(echo -n ':banana' | sha256sum | cut -f1 -d' ')
+```
+
+Other tools that for instance utilize netrc then could access it as such:
+
+```
+$ cat netrc
+machine gcloud-uri-signer.corp.com password banana
+$ nix copy --to 'http://gcloud-uri-signer.corp.com:8000/bucket/' /nix/store/some-output --option netrc-file netrc
+# just works
+```
