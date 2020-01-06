@@ -4,6 +4,7 @@ version = "1.0.0"
 authors = ["Simonas Kazlauskas <simonas@standard.ai>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
+readme = "README.mkd"
 
 
 [dependencies]
