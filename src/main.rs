@@ -4,8 +4,8 @@ use std::error::Error as StdError;
 
 #[derive(Clone, Debug, structopt::StructOpt)]
 #[structopt(
-    name = "gcs-basic-auth",
-    about = "A proxy which authenticates and signs GCS ops with basic HTTP auth"
+    name = "gcloud-uri-signer",
+    about = "A basic authentication proxy for google storage (and possibly other services)"
 )]
 struct Opts {
     /// Bind address
