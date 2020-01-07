@@ -12,11 +12,11 @@ struct Opts {
     #[structopt(short = "b", long = "bind", default_value = "[::1]:80")]
     bind: std::net::SocketAddr,
 
-    /// Hex-digest of a SHA256-hashed `<username>:<password>` pair
+    /// Hex-digests of a SHA256-hashed `<username>:<password>` pairs
     ///
     /// Either `<username>` or `<password>` may be empty strings
-    #[structopt(short = "c", long = "credentials")]
-    creds: Option<String>,
+    #[structopt(short = "c", long = "credentials", min_values=0, value_delimiter=",")]
+    creds: Vec<String>,
 
     /// Allow signing PUT requests
     #[structopt(long = "put")]
@@ -227,25 +227,10 @@ fn sign_bucket_url(
         .map_err(Error::UriBuild)
 }
 
-/// Verify credentials.
-///
-/// `incoming` is a base64-encoded header value typically put in the Authorization header.
-/// `expected_hash` is a sha256 hash of the base64-decoded value.
-///
-fn verify_basic_auth(incoming: &[u8], expected_hash: &[u8]) -> bool {
-    if let Ok(decoded) = base64::decode(&incoming) {
-        let hash = ring::digest::digest(&ring::digest::SHA256, &decoded);
-        let hexlower = data_encoding::HEXLOWER.encode(hash.as_ref());
-        if hexlower.as_bytes() == expected_hash {
-            return true;
-        }
-    }
-    return false;
-}
-
 async fn service_fn(
     req: hyper::Request<hyper::Body>,
     opts: Opts,
+    credset: std::collections::HashSet<String>,
 ) -> Result<hyper::Response<hyper::Body>, hyper::http::Error> {
     // Verify if we support this verb
     if (req.method() == http::Method::PUT && !opts.put)
@@ -256,14 +241,16 @@ async fn service_fn(
             .status(http::StatusCode::METHOD_NOT_ALLOWED)
             .body(hyper::Body::empty());
     }
+
     // And check credentials.
-    if let Some(creds) = opts.creds {
-        'authloop: loop {
-            if let Some(ahdr) = req.headers().get(hyper::header::AUTHORIZATION) {
-                if verify_basic_auth(&ahdr.as_bytes()[b"Basic ".len()..], creds.as_bytes()) {
-                    break 'authloop;
-                }
-            }
+    if !credset.is_empty() {
+        let received_hash = req.headers().get(hyper::header::AUTHORIZATION).and_then(|ahdr| {
+            base64::decode(&ahdr.as_bytes()[b"Basic ".len()..]).ok()
+        }).map(|pair| {
+            let hash = ring::digest::digest(&ring::digest::SHA256, &pair);
+            data_encoding::HEXLOWER.encode(hash.as_ref())
+        });
+        if received_hash.map(|hash| credset.contains(&hash)) != Some(true) {
             return hyper::Response::builder()
                 .status(http::StatusCode::UNAUTHORIZED)
                 .body(hyper::Body::empty());
@@ -311,12 +298,13 @@ fn run(opts: &Opts) -> Result<(), Error> {
         .enable_all()
         .build()
         .map_err(Error::CreateAsyncRuntime)?;
+    let credset: std::collections::HashSet<String> = opts.creds.iter().cloned().collect();
     let server = threaded_rt.enter(move || {
         hyper::Server::bind(&opts.bind).serve(hyper::service::make_service_fn(move |_conn| {
-            let opts = opts.clone();
+            let (opts, credset) = (opts.clone(), credset.clone());
             async move {
                 Ok::<_, std::convert::Infallible>(hyper::service::service_fn(move |req| {
-                    service_fn(req, opts.clone())
+                    service_fn(req, opts.clone(), credset.clone())
                 }))
             }
         }))
